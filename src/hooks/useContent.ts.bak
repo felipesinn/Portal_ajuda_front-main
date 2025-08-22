@@ -1,0 +1,1951 @@
+// import { useState, useCallback, useEffect } from 'react';
+// import { contentService } from '../services/content.service';
+// import { ContentType, type ContentItem, type CreateContentData, type UpdateContentData } from '../types/content.types';
+// import type { SectorType } from '../types/common.types';
+// // ✅ IMPORTAR FUNÇÕES DE LOG SEGURO DO ENVUTILS
+// import { 
+//   safeLog, 
+//   safeWarn, 
+//   safeError, 
+//   safeDebug, 
+//   safeTime, 
+//   safeTimeEnd, 
+//   performanceLog,
+//   ENV_CONFIG 
+// } from '../utils/envUtils';
+
+// interface UseContentOptions {
+//   sector?: SectorType;
+//   autoLoad?: boolean;
+// }
+
+// interface UseContentReturn {
+//   // Estado
+//   contents: ContentItem[];
+//   loading: boolean;
+//   error: string | null;
+  
+//   // Ações básicas
+//   loadContents: () => Promise<void>;
+//   refreshContents: () => Promise<void>;
+  
+//   // CRUD de conteúdo
+//   createContent: (data: CreateContentData) => Promise<ContentItem>;
+//   updateContent: (id: string, data: UpdateContentData) => Promise<ContentItem>;
+//   deleteContent: (id: string) => Promise<boolean>;
+  
+//   // Wiki Additions
+//   createWikiAddition: (data: {
+//     contentId: string;
+//     title: string;
+//     textContent: string;
+//     type: ContentType;
+//     file?: File;
+//     author?: string;
+//   }) => Promise<boolean>;
+//   deleteWikiAddition: (id: string | number) => Promise<boolean>;
+  
+//   // Upload de arquivos
+//   uploadFile: (file: File) => Promise<any>;
+//   deleteFile: (fileId: string) => Promise<boolean>;
+  
+//   // Utilitários
+//   getContentById: (id: string | number) => ContentItem | undefined;
+//   clearError: () => void;
+// }
+
+// export const useContent = (options: UseContentOptions = {}): UseContentReturn => {
+//   const { sector, autoLoad = true } = options;
+  
+//   // Estado
+//   const [contents, setContents] = useState<ContentItem[]>([]);
+//   const [loading, setLoading] = useState(false);
+//   const [error, setError] = useState<string | null>(null);
+
+//   // ✅ UTILITÁRIO PARA NOTIFICAÇÕES
+//   const showNotification = useCallback((message: string, type: 'success' | 'error' = 'success') => {
+//     const notification = document.createElement('div');
+//     const bgColor = type === 'success' ? 'bg-green-500' : 'bg-red-500';
+//     notification.className = `fixed top-4 right-4 ${bgColor} text-white px-4 py-2 rounded shadow-lg z-50 max-w-sm`;
+//     notification.textContent = message;
+//     document.body.appendChild(notification);
+    
+//     setTimeout(() => {
+//       if (document.body.contains(notification)) {
+//         document.body.removeChild(notification);
+//       }
+//     }, type === 'error' ? 5000 : 3000);
+//   }, []);
+
+//   // ✅ CARREGAR CONTEÚDOS COM PERFORMANCE TRACKING
+//   const loadContents = useCallback(async () => {
+//     const startTime = performance.now();
+//     safeTime('useContent-loadContents');
+    
+//     setLoading(true);
+//     setError(null);
+    
+//     try {
+//       safeLog('🔄 useContent: Carregando conteúdos...', { 
+//         sector, 
+//         timestamp: new Date().toISOString(),
+//         autoLoad 
+//       });
+      
+//       const data = sector ? 
+//         await contentService.getContentsBySector(sector) : 
+//         await contentService.getAllContents();
+      
+//       safeLog('✅ useContent: Conteúdos carregados com sucesso:', {
+//         count: data.length,
+//         sector,
+//         timestamp: new Date().toISOString(),
+//         firstItem: data[0]?.title || 'Nenhum item',
+//         hasWikiAdditions: data.some(item => (item as any)?.strapiData?.all_wiki_additions?.length > 0)
+//       });
+      
+//       setContents(data);
+//       performanceLog('Carregamento de conteúdos', startTime);
+      
+//     } catch (err: any) {
+//       const errorMessage = err.message || 'Erro ao carregar conteúdos';
+//       safeError('❌ useContent: Erro ao carregar conteúdos:', {
+//         error: err.message || err,
+//         stack: err.stack,
+//         sector,
+//         timestamp: new Date().toISOString()
+//       });
+//       setError(errorMessage);
+//       showNotification(errorMessage, 'error');
+//     } finally {
+//       setLoading(false);
+//       safeTimeEnd('useContent-loadContents');
+//     }
+//   }, [sector, showNotification, autoLoad]);
+
+//   // ✅ REFRESH COM LOG ESPECÍFICO
+//   const refreshContents = useCallback(() => {
+//     safeLog('🔄 useContent: Refresh manual solicitado');
+//     return loadContents();
+//   }, [loadContents]);
+
+//   // ✅ CRIAR CONTEÚDO COM LOGS DETALHADOS
+//   const createContent = useCallback(async (data: CreateContentData): Promise<ContentItem> => {
+//     const startTime = performance.now();
+    
+//     try {
+//       safeLog('➕ useContent: Criando conteúdo:', {
+//         title: data.title,
+//         type: data.type,
+//         sector: data.sector,
+//         hasFile: !!(data as any).file,
+//         timestamp: new Date().toISOString()
+//       });
+      
+//       const newContent = await contentService.createContent(data);
+      
+//       // ✅ ATUALIZAR ESTADO LOCAL COM LOG
+//       setContents(prev => {
+//         const updated = [newContent, ...prev];
+//         safeDebug('📊 useContent: Estado atualizado após criação:', {
+//           totalItens: updated.length,
+//           novoItem: {
+//             id: newContent.id,
+//             title: newContent.title
+//           }
+//         });
+//         return updated;
+//       });
+      
+//       safeLog('✅ useContent: Conteúdo criado com sucesso:', {
+//         id: newContent.id,
+//         title: newContent.title,
+//         timestamp: new Date().toISOString()
+//       });
+      
+//       performanceLog('Criação de conteúdo', startTime);
+//       showNotification('Conteúdo criado com sucesso!');
+//       return newContent;
+      
+//     } catch (err: any) {
+//       const errorMessage = err.message || 'Erro ao criar conteúdo';
+//       safeError('❌ useContent: Erro ao criar conteúdo:', {
+//         error: err.message || err,
+//         data: { title: data.title, type: data.type },
+//         timestamp: new Date().toISOString()
+//       });
+//       setError(errorMessage);
+//       showNotification(errorMessage, 'error');
+//       throw err;
+//     }
+//   }, [showNotification]);
+
+//   // ✅ ATUALIZAR CONTEÚDO COM COMPARAÇÃO SEGURA
+//   const updateContent = useCallback(async (id: string, data: UpdateContentData): Promise<ContentItem> => {
+//     const startTime = performance.now();
+    
+//     try {
+//       safeLog('🔄 useContent: Atualizando conteúdo:', {
+//         id,
+//         updates: Object.keys(data),
+//         timestamp: new Date().toISOString()
+//       });
+      
+//       const updatedContent = await contentService.updateContent(id, data);
+      
+//       // ✅ ATUALIZAR ESTADO LOCAL COM COMPARAÇÃO SEGURA E LOG
+//       setContents(prev => {
+//         const updated = prev.map(content => {
+//           const match = content.id.toString() === id.toString();
+//           if (match) {
+//             safeDebug('🔄 useContent: Item atualizado no estado:', {
+//               id: content.id,
+//               oldTitle: content.title,
+//               newTitle: updatedContent.title
+//             });
+//           }
+//           return match ? updatedContent : content;
+//         });
+        
+//         safeDebug('📊 useContent: Estado após atualização:', {
+//           totalItens: updated.length,
+//           itemAtualizado: updatedContent.title
+//         });
+        
+//         return updated;
+//       });
+      
+//       safeLog('✅ useContent: Conteúdo atualizado com sucesso:', {
+//         id,
+//         title: updatedContent.title,
+//         timestamp: new Date().toISOString()
+//       });
+      
+//       performanceLog('Atualização de conteúdo', startTime);
+//       showNotification('Conteúdo atualizado com sucesso!');
+//       return updatedContent;
+      
+//     } catch (err: any) {
+//       const errorMessage = err.message || 'Erro ao atualizar conteúdo';
+//       safeError('❌ useContent: Erro ao atualizar conteúdo:', {
+//         error: err.message || err,
+//         id,
+//         updates: Object.keys(data),
+//         timestamp: new Date().toISOString()
+//       });
+//       setError(errorMessage);
+//       showNotification(errorMessage, 'error');
+//       throw err;
+//     }
+//   }, [showNotification]);
+
+//   // ✅ EXCLUIR CONTEÚDO COM VERIFICAÇÃO E RELOAD
+//   const deleteContent = useCallback(async (id: string): Promise<boolean> => {
+//     const startTime = performance.now();
+    
+//     try {
+//       safeLog('🗑️ useContent: Iniciando exclusão de conteúdo:', {
+//         id,
+//         timestamp: new Date().toISOString()
+//       });
+      
+//       // ✅ BUSCAR ITEM ANTES DA EXCLUSÃO PARA LOG
+//       const itemToDelete = contents.find(c => c.id.toString() === id.toString());
+//       if (itemToDelete) {
+//         safeDebug('📋 useContent: Item a ser excluído:', {
+//           id: itemToDelete.id,
+//           title: itemToDelete.title,
+//           wikiAdditions: (itemToDelete as any)?.strapiData?.all_wiki_additions?.length || 0
+//         });
+//       }
+      
+//       const result = await contentService.deleteContent(id);
+      
+//       safeLog('📋 useContent: Resposta da exclusão:', {
+//         result,
+//         success: result.success,
+//         message: result.message,
+//         timestamp: new Date().toISOString()
+//       });
+      
+//       if (result.success) {
+//         safeLog('✅ useContent: Exclusão confirmada pela API');
+        
+//         // ✅ AGUARDAR UM POUCO PARA GARANTIR PERSISTÊNCIA
+//         safeDebug('⏳ useContent: Aguardando persistência no servidor...');
+//         await new Promise(resolve => setTimeout(resolve, 1500));
+        
+//         // ✅ FAZER RELOAD COMPLETO PARA GARANTIR SINCRONIZAÇÃO
+//         safeLog('🔄 useContent: Recarregando lista completa após exclusão...');
+//         await loadContents();
+        
+//         performanceLog('Exclusão de conteúdo (com reload)', startTime);
+//         showNotification('Conteúdo excluído com sucesso!');
+//         return true;
+        
+//       } else {
+//         throw new Error(result.message || 'Falha ao excluir conteúdo');
+//       }
+      
+//     } catch (err: any) {
+//       const errorMessage = err.message || 'Erro ao excluir conteúdo';
+//       safeError('❌ useContent: Erro na exclusão:', {
+//         error: err.message || err,
+//         id,
+//         stack: err.stack,
+//         timestamp: new Date().toISOString()
+//       });
+//       setError(errorMessage);
+//       showNotification(errorMessage, 'error');
+//       return false;
+//     }
+//   }, [contents, loadContents, showNotification]);
+
+//   // ✅ CRIAR WIKI ADDITION COM LOGS DETALHADOS
+//   const createWikiAddition = useCallback(async (data: {
+//     contentId: string;
+//     title: string;
+//     textContent: string;
+//     type: ContentType;
+//     file?: File;
+//     author?: string;
+//   }): Promise<boolean> => {
+//     const startTime = performance.now();
+    
+//     try {
+//       safeLog('➕ useContent: Iniciando criação de Wiki Addition:', {
+//         contentId: data.contentId,
+//         title: data.title,
+//         type: data.type,
+//         hasFile: !!data.file,
+//         author: data.author || 'Sistema',
+//         timestamp: new Date().toISOString()
+//       });
+      
+//       // ✅ BUSCAR O CONTENT PARA PEGAR DOCUMENT ID
+//       const content = contents.find(c => c.id.toString() === data.contentId);
+      
+//       if (!content) {
+//         throw new Error(`Content com ID ${data.contentId} não encontrado no estado local`);
+//       }
+      
+//       const documentId = (content as any)?.strapiData?.documentId;
+//       if (!documentId) {
+//         throw new Error(`DocumentId não encontrado para o content ID ${data.contentId}`);
+//       }
+      
+//       safeLog('📊 useContent: Content parent localizado:', {
+//         contentId: data.contentId,
+//         documentId: documentId,
+//         contentTitle: content?.title,
+//         existingAdditions: (content as any)?.strapiData?.all_wiki_additions?.length || 0,
+//         timestamp: new Date().toISOString()
+//       });
+      
+//       // ✅ USAR CONTENTSERVICE COM DOCUMENT ID
+//       const result = await contentService.createWikiAddition({
+//         contentId: documentId, // ✅ PASSAR DOCUMENT ID
+//         title: data.title,
+//         textContent: data.textContent,
+//         type: data.type,
+//         file: data.file,
+//         author: data.author
+//       });
+
+//       if (result.success) {
+//         safeLog('✅ useContent: Wiki addition criada com sucesso:', {
+//           resultData: result.data,
+//           timestamp: new Date().toISOString()
+//         });
+        
+//         // ✅ AGUARDAR UM POUCO E RECARREGAR PARA PEGAR A NOVA ADIÇÃO
+//         safeDebug('⏳ useContent: Aguardando antes do reload...');
+//         await new Promise(resolve => setTimeout(resolve, 2000));
+        
+//         safeLog('🔄 useContent: Recarregando conteúdos para incluir nova adição...');
+//         await loadContents();
+        
+//         performanceLog('Criação de Wiki Addition (com reload)', startTime);
+//         showNotification(`Nova adição "${data.title}" criada com sucesso!`, 'success');
+//         return true;
+        
+//       } else {
+//         throw new Error(result.message || 'Falha ao criar Wiki Addition');
+//       }
+      
+//     } catch (err: any) {
+//       const errorMessage = err.message || 'Erro ao criar adição';
+//       safeError('❌ useContent: Erro ao criar Wiki Addition:', {
+//         error: err.message || err,
+//         data: {
+//           contentId: data.contentId,
+//           title: data.title,
+//           type: data.type
+//         },
+//         stack: err.stack,
+//         timestamp: new Date().toISOString()
+//       });
+//       setError(errorMessage);
+//       showNotification(errorMessage, 'error');
+//       return false;
+//     }
+//   }, [contents, loadContents, showNotification]);
+
+//   // ✅ EXCLUIR WIKI ADDITION COM VERIFICAÇÕES
+//   const deleteWikiAddition = useCallback(async (id: string | number): Promise<boolean> => {
+//     const startTime = performance.now();
+    
+//     try {
+//       safeLog('🗑️ useContent: Iniciando exclusão de Wiki Addition:', {
+//         id,
+//         idType: typeof id,
+//         timestamp: new Date().toISOString()
+//       });
+      
+//       if (!id) {
+//         throw new Error('ID da adição não fornecido');
+//       }
+      
+//       // ✅ BUSCAR A ADIÇÃO NOS DADOS ATUAIS PARA LOG
+//       const parentContent = contents.find(content => {
+//         const additions = (content as any)?.strapiData?.all_wiki_additions || [];
+//         return additions.some((addition: any) => addition.id === Number(id) || addition.id === String(id));
+//       });
+      
+//       if (parentContent) {
+//         safeDebug('📋 useContent: Wiki Addition encontrada para exclusão:', {
+//           parentContentId: parentContent.id,
+//           parentContentTitle: parentContent.title,
+//           additionId: id
+//         });
+//       }
+      
+//       const result = await contentService.deleteWikiAddition(id);
+
+//       safeLog('📋 useContent: Resposta da exclusão de Wiki Addition:', {
+//         result,
+//         success: result.success,
+//         message: result.message,
+//         timestamp: new Date().toISOString()
+//       });
+
+//       if (result.success) {
+//         safeLog('✅ useContent: Wiki Addition excluída com sucesso via API');
+        
+//         // ✅ AGUARDAR E RECARREGAR
+//         safeDebug('⏳ useContent: Aguardando persistência...');
+//         await new Promise(resolve => setTimeout(resolve, 1500));
+        
+//         safeLog('🔄 useContent: Recarregando para atualizar wiki additions...');
+//         await loadContents();
+        
+//         performanceLog('Exclusão de Wiki Addition (com reload)', startTime);
+//         showNotification('Adição excluída com sucesso!', 'success');
+//         return true;
+        
+//       } else {
+//         throw new Error(result.message || 'Falha ao excluir adição');
+//       }
+      
+//     } catch (err: any) {
+//       const errorMessage = err.message || 'Erro ao excluir adição';
+//       safeError('❌ useContent: Erro ao excluir Wiki Addition:', {
+//         error: err.message || err,
+//         id,
+//         idType: typeof id,
+//         stack: err.stack,
+//         timestamp: new Date().toISOString()
+//       });
+//       setError(errorMessage);
+//       showNotification(errorMessage, 'error');
+//       return false;
+//     }
+//   }, [contents, loadContents, showNotification]);
+
+//   // ✅ NOVO: ATUALIZAR WIKI ADDITION COM LOGS DETALHADOS
+//   const updateWikiAddition = useCallback(async (data: {
+//     additionId: string | number;
+//     contentId: string; // ID do artigo principal
+//     title: string;
+//     textContent: string;
+//     type: ContentType;
+//     file?: File;
+//     author?: string;
+//   }): Promise<boolean> => {
+//     const startTime = performance.now();
+//     
+//     try {
+//       safeLog('🔄 useContent: Iniciando atualização de Wiki Addition:', { 
+//         additionId: data.additionId, 
+//         contentId: data.contentId, 
+//         title: data.title, 
+//         type: data.type, 
+//         hasFile: !!data.file,
+//         timestamp: new Date().toISOString()
+//       });
+//     
+//     // Validação de entrada
+//     if (!data.additionId) {
+//       throw new Error('ID da adição não fornecido');
+//     }
+//     
+//     // Preparar dados para atualização
+//     const additionId = Number(data.additionId);
+//     if (isNaN(additionId)) {
+//       throw new Error(`ID da adição inválido: ${data.additionId}`);
+//     }
+//     
+//     // Criar conteúdo formatado para o Strapi
+//     const content = [
+//       {
+//         type: 'paragraph',
+//         children: [{ text: data.textContent || '', type: 'text' }]
+//       }
+//     ];
+//     
+//     // Preparar dados para atualização
+//     const updateData: Partial<any> = {
+//       title: data.title,
+//       content: content,
+//       author: data.author || 'Sistema'
+//     };
+//     
+//     // Se houver arquivo, fazer upload primeiro
+//     if (data.file) {
+//       try {
+//         const uploadResult = await contentService.uploadFile(data.file);
+//         if (uploadResult && uploadResult.length > 0) {
+//           updateData.attachments = {
+//             connect: [uploadResult[0].id]
+//           };
+//         }
+//       } catch (uploadError) {
+//         safeWarn('⚠️ useContent: Falha no upload, continuando sem arquivo:', uploadError);
+//       }
+//     }
+//     
+//     // Chamar o serviço de atualização
+//     const result = await contentService.updateWikiAddition(additionId, updateData);
+//     
+//     safeLog('✅ useContent: Wiki addition atualizada com sucesso:', { 
+//       additionId: data.additionId, 
+//       result: result,
+//       timestamp: new Date().toISOString()
+//     });
+//     
+//     // Recarregar conteúdos para refletir as mudanças
+//     await loadContents();
+//     
+//     performanceLog('Atualização de Wiki Addition', startTime);
+//     showNotification(`Adição "${data.title}" atualizada com sucesso!`, 'success');
+//     return true;
+//   } catch (err: any) {
+//     const errorMessage = err.message || 'Erro ao atualizar adição';
+//     safeError('❌ useContent: Erro ao atualizar Wiki Addition:', {
+//       error: err.message || err,
+//       data: {
+//         additionId: data.additionId,
+//         contentId: data.contentId,
+//         title: data.title
+//       },
+//       stack: err.stack,
+//       timestamp: new Date().toISOString()
+//     });
+//     setError(errorMessage);
+//     showNotification(errorMessage, 'error');
+//     return false;
+//   }
+// }, [loadContents, showNotification]);
+
+  const uploadFile = useCallback(async (file: File) => {
+    const startTime = performance.now();
+    
+    try {
+      safeLog('📤 useContent: Iniciando upload de arquivo:', {
+        fileName: file.name,
+        fileSize: `${(file.size / 1024).toFixed(2)} KB`,
+        fileType: file.type,
+        timestamp: new Date().toISOString()
+      });
+      
+      // ✅ VALIDAÇÕES COM LOGS
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      if (file.size > maxSize) {
+        const errorMsg = `Arquivo muito grande: ${(file.size / 1024 / 1024).toFixed(2)}MB. Máximo: 10MB`;
+        safeWarn('⚠️ useContent: Arquivo muito grande:', {
+          fileName: file.name,
+          fileSize: file.size,
+          maxSize
+        });
+        throw new Error(errorMsg);
+      }
+      
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'video/mp4', 'video/webm'];
+      if (!allowedTypes.includes(file.type)) {
+        safeWarn('⚠️ useContent: Tipo de arquivo não suportado:', {
+          fileName: file.name,
+          fileType: file.type,
+          allowedTypes
+        });
+        throw new Error(`Tipo de arquivo não suportado: ${file.type}. Use: ${allowedTypes.join(', ')}`);
+      }
+      
+      const result = await contentService.uploadFile(file);
+      
+      safeLog('✅ useContent: Upload realizado com sucesso:', {
+        fileName: file.name,
+        result: result[0] ? {
+          id: result[0].id,
+          name: result[0].name,
+          url: result[0].url,
+          size: result[0].size
+        } : result,
+        timestamp: new Date().toISOString()
+      });
+      
+      performanceLog('Upload de arquivo', startTime);
+      showNotification('Arquivo enviado com sucesso!');
+      return result;
+      
+    } catch (err: any) {
+      const errorMessage = err.message || 'Erro no upload';
+      safeError('❌ useContent: Erro no upload:', {
+        error: err.message || err,
+        fileName: file.name,
+        fileSize: file.size,
+        stack: err.stack,
+        timestamp: new Date().toISOString()
+      });
+      setError(errorMessage);
+      showNotification(errorMessage, 'error');
+      throw err;
+    }
+  }, [showNotification]);
+
+  const deleteFile = useCallback(async (fileId: string): Promise<boolean> => {
+    try {
+      safeLog('🗑️ useContent: Iniciando exclusão de arquivo:', {
+        fileId,
+        timestamp: new Date().toISOString()
+      });
+      
+      if (!fileId) {
+        throw new Error('ID do arquivo inválido');
+      }
+      
+      const result = await contentService.deleteFile(fileId);
+
+      if (result.success) {
+        safeLog('✅ useContent: Arquivo excluído com sucesso:', {
+          fileId,
+          timestamp: new Date().toISOString()
+        });
+        showNotification('Arquivo excluído com sucesso!', 'success');
+        return true;
+      } else {
+        throw new Error(result.message || 'Falha ao excluir arquivo');
+      }
+      
+    } catch (err: any) {
+      const errorMessage = err.message || 'Erro ao excluir arquivo';
+      safeError('❌ useContent: Erro ao excluir arquivo:', {
+        error: err.message || err,
+        fileId,
+        timestamp: new Date().toISOString()
+      });
+      setError(errorMessage);
+      showNotification(errorMessage, 'error');
+      return false;
+    }
+  }, [showNotification]);
+
+  const getContentById = useCallback((id: string | number): ContentItem | undefined => {
+    const content = contents.find(content => content.id.toString() === id.toString());
+    
+    if (ENV_CONFIG.isDev) {
+      safeDebug('🔍 useContent: Busca por ID:', {
+        searchId: id,
+        found: !!content,
+        foundTitle: content?.title,
+        totalContents: contents.length
+      });
+    }
+    
+    return content;
+  }, [contents]);
+
+  const clearError = useCallback(() => {
+    safeLog('🧹 useContent: Limpando erro');
+    setError(null);
+  }, []);
+
+  useEffect(() => {
+    if (autoLoad) {
+      safeLog('🚀 useContent: Auto load habilitado:', {
+        sector,
+        timestamp: new Date().toISOString()
+      });
+      loadContents();
+    } else {
+      safeLog('⏸️ useContent: Auto load desabilitado');
+    }
+  }, [autoLoad, loadContents]);
+
+  useEffect(() => {
+    if (ENV_CONFIG.isDev) { 
+      safeDebug('📊 useContent: Estado atualizado:', {
+        contentsCount: contents.length,
+        loading,
+        hasError: !!error,
+        errorMessage: error,
+        sector,
+        timestamp: new Date().toISOString(),
+        contentsWithAdditions: contents.filter(c => (c as any)?.strapiData?.all_wiki_additions?.length > 0).length
+      });
+    }
+  }, [contents.length, loading, error, sector]);
+
+  return {
+    // Estado
+    contents,
+    loading,
+    error,
+    
+    // Ações básicas
+    loadContents,
+    refreshContents,
+    
+    // CRUD de conteúdo
+    createContent,
+    updateContent,
+    deleteContent,
+    
+    // Wiki Additions
+    createWikiAddition,
+    deleteWikiAddition,
+    
+    // Upload de arquivos
+    uploadFile,
+    deleteFile,
+    
+    // Utilitários
+    getContentById,
+    clearError,
+  };
+};
+
+export default useContent;
+
+
+
+/// arquivo em teste 
+
+
+import { useState, useCallback, useEffect } from 'react';
+import { contentService } from '../services/content.service';
+import { ContentType, type ContentItem, type CreateContentData, type UpdateContentData } from '../types/content.types';
+import type { SectorType } from '../types/common.types';
+import { 
+  safeLog, 
+  safeWarn, 
+  safeError, 
+  safeDebug, 
+  safeTime, 
+  safeTimeEnd, 
+  performanceLog,
+  ENV_CONFIG 
+} from '../utils/envUtils';
+
+interface UseContentOptions {
+  sector?: SectorType;
+  autoLoad?: boolean;
+}
+
+interface UseContentReturn {
+  // Estado
+  contents: ContentItem[];
+  loading: boolean;
+  error: string | null;
+  
+  // Ações básicas
+  loadContents: () => Promise<void>;
+  refreshContents: () => Promise<void>;
+  
+  // CRUD de conteúdo
+  createContent: (data: CreateContentData) => Promise<ContentItem>;
+  updateContent: (id: string, data: UpdateContentData) => Promise<ContentItem>;
+  deleteContent: (id: string) => Promise<boolean>;
+  
+  // Wiki Additions
+  createWikiAddition: (data: {
+    contentId: string;
+    title: string;
+    textContent: string;
+    type: ContentType;
+    file?: File;
+    author?: string;
+  }) => Promise<boolean>;
+  deleteWikiAddition: (id: string | number) => Promise<boolean>;
+  
+  // Upload de arquivos
+  uploadFile: (file: File) => Promise<any>;
+  deleteFile: (fileId: string) => Promise<boolean>;
+  
+  // Utilitários
+  getContentById: (id: string | number) => ContentItem | undefined;
+  clearError: () => void;
+}
+
+export const useContent = (options: UseContentOptions = {}): UseContentReturn => {
+  const { sector, autoLoad = true } = options;
+  
+  // Estado
+  const [contents, setContents] = useState<ContentItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const showNotification = useCallback((message: string, type: 'success' | 'error' = 'success') => {
+    const notification = document.createElement('div');
+    const bgColor = type === 'success' ? 'bg-green-500' : 'bg-red-500';
+    notification.className = `fixed top-4 right-4 ${bgColor} text-white px-4 py-2 rounded shadow-lg z-50 max-w-sm`;
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+      if (document.body.contains(notification)) {
+        document.body.removeChild(notification);
+      }
+    }, type === 'error' ? 5000 : 3000);
+  }, []);
+
+  const loadContents = useCallback(async () => {
+    const startTime = performance.now();
+    safeTime('useContent-loadContents');
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      safeLog('🔄 useContent: Carregando conteúdos...', { 
+        sector, 
+        timestamp: new Date().toISOString(),
+        autoLoad 
+      });
+      
+      const data = sector ? 
+        await contentService.getContentsBySector(sector) : 
+        await contentService.getAllContents();
+      
+      safeLog('✅ useContent: Conteúdos carregados com sucesso:', {
+        count: data.length,
+        sector,
+        timestamp: new Date().toISOString(),
+        firstItem: data[0]?.title || 'Nenhum item',
+        hasWikiAdditions: data.some(item => (item as any)?.strapiData?.all_wiki_additions?.length > 0)
+      });
+      
+      setContents(data);
+      performanceLog('Carregamento de conteúdos', startTime);
+      
+    } catch (err: any) {
+      const errorMessage = err.message || 'Erro ao carregar conteúdos';
+      safeError('❌ useContent: Erro ao carregar conteúdos:', {
+        error: err.message || err,
+        stack: err.stack,
+        sector,
+        timestamp: new Date().toISOString()
+      });
+      setError(errorMessage);
+      showNotification(errorMessage, 'error');
+    } finally {
+      setLoading(false);
+      safeTimeEnd('useContent-loadContents');
+    }
+  }, [sector, showNotification, autoLoad]);
+
+  const refreshContents = useCallback(() => {
+    safeLog('🔄 useContent: Refresh manual solicitado');
+    return loadContents();
+  }, [loadContents]);
+
+  const createContent = useCallback(async (data: CreateContentData): Promise<ContentItem> => {
+    const startTime = performance.now();
+    
+    try {
+      safeLog('➕ useContent: Criando conteúdo:', {
+        title: data.title,
+        type: data.type,
+        sector: data.sector,
+        hasFile: !!(data as any).file,
+        timestamp: new Date().toISOString()
+      });
+      
+      const newContent = await contentService.createContent(data);
+      
+      setContents(prev => {
+        const updated = [newContent, ...prev];
+        safeDebug('📊 useContent: Estado atualizado após criação:', {
+          totalItens: updated.length,
+          novoItem: {
+            id: newContent.id,
+            title: newContent.title
+          }
+        });
+        return updated;
+      });
+      
+      safeLog('✅ useContent: Conteúdo criado com sucesso:', {
+        id: newContent.id,
+        title: newContent.title,
+        timestamp: new Date().toISOString()
+      });
+      
+      performanceLog('Criação de conteúdo', startTime);
+      showNotification('Conteúdo criado com sucesso!');
+      return newContent;
+      
+    } catch (err: any) {
+      const errorMessage = err.message || 'Erro ao criar conteúdo';
+      safeError('❌ useContent: Erro ao criar conteúdo:', {
+        error: err.message || err,
+        data: { title: data.title, type: data.type },
+        timestamp: new Date().toISOString()
+      });
+      setError(errorMessage);
+      showNotification(errorMessage, 'error');
+      throw err;
+    }
+  }, [showNotification]);
+
+  const updateContent = useCallback(async (id: string, data: UpdateContentData): Promise<ContentItem> => {
+    const startTime = performance.now();
+    
+    try {
+      safeLog('🔄 useContent: Atualizando conteúdo:', {
+        id,
+        updates: Object.keys(data),
+        timestamp: new Date().toISOString()
+      });
+      
+      const updatedContent = await contentService.updateContent(id, data);
+      
+      setContents(prev => {
+        const updated = prev.map(content => {
+          const match = content.id.toString() === id.toString();
+          if (match) {
+            safeDebug('🔄 useContent: Item atualizado no estado:', {
+              id: content.id,
+              oldTitle: content.title,
+              newTitle: updatedContent.title
+            });
+          }
+          return match ? updatedContent : content;
+        });
+        
+        safeDebug('📊 useContent: Estado após atualização:', {
+          totalItens: updated.length,
+          itemAtualizado: updatedContent.title
+        });
+        
+        return updated;
+      });
+      
+      safeLog('✅ useContent: Conteúdo atualizado com sucesso:', {
+        id,
+        title: updatedContent.title,
+        timestamp: new Date().toISOString()
+      });
+      
+      performanceLog('Atualização de conteúdo', startTime);
+      showNotification('Conteúdo atualizado com sucesso!');
+      return updatedContent;
+      
+    } catch (err: any) {
+      const errorMessage = err.message || 'Erro ao atualizar conteúdo';
+      safeError('❌ useContent: Erro ao atualizar conteúdo:', {
+        error: err.message || err,
+        id,
+        updates: Object.keys(data),
+        timestamp: new Date().toISOString()
+      });
+      setError(errorMessage);
+      showNotification(errorMessage, 'error');
+      throw err;
+    }
+  }, [showNotification]);
+
+  const deleteContent = useCallback(async (id: string): Promise<boolean> => {
+    const startTime = performance.now();
+    
+    try {
+      safeLog('🗑️ useContent: Iniciando exclusão de conteúdo:', {
+        id,
+        timestamp: new Date().toISOString()
+      });
+      
+      const result = await contentService.deleteContent(id);
+      
+      if (result.success) {
+        safeLog('✅ useContent: Exclusão confirmada pela API');
+        
+        // ✅ CORREÇÃO: Remove o item localmente para feedback instantâneo.
+        setContents(prev => {
+            const updated = prev.filter(content => content.id.toString() !== id.toString());
+            safeDebug('📊 useContent: Estado após exclusão local:', { totalItens: updated.length });
+            return updated;
+        });
+
+        // E então recarrega a lista do backend para garantir que o estado local
+        // e o do servidor estejam sincronizados.
+        await loadContents();
+        
+        performanceLog('Exclusão de conteúdo', startTime);
+        showNotification('Conteúdo excluído com sucesso!', 'success');
+        return true;
+        
+      } else {
+        throw new Error(result.message || 'Falha ao excluir conteúdo');
+      }
+      
+    } catch (err: any) {
+      const errorMessage = err.message || 'Erro ao excluir conteúdo';
+      safeError('❌ useContent: Erro na exclusão:', {
+        error: err.message || err,
+        id,
+        stack: err.stack,
+        timestamp: new Date().toISOString()
+      });
+      setError(errorMessage);
+      showNotification(errorMessage, 'error');
+      return false;
+    }
+  }, [loadContents, showNotification]);
+
+  const createWikiAddition = useCallback(async (data: {
+    contentId: string;
+    title: string;
+    textContent: string;
+    type: ContentType;
+    file?: File;
+    author?: string;
+  }): Promise<boolean> => {
+    const startTime = performance.now();
+    
+    try {
+      safeLog('➕ useContent: Iniciando criação de Wiki Addition:', {
+        contentId: data.contentId,
+        title: data.title,
+        type: data.type,
+        hasFile: !!data.file,
+        author: data.author || 'Sistema',
+        timestamp: new Date().toISOString()
+      });
+      
+      const content = contents.find(c => c.id.toString() === data.contentId);
+      if (!content) {
+        throw new Error(`Content com ID ${data.contentId} não encontrado no estado local`);
+      }
+      
+      const documentId = (content as any)?.strapiData?.documentId || content.id.toString();
+      if (!documentId) {
+        throw new Error(`DocumentId não encontrado para o content ID ${data.contentId}`);
+      }
+      
+      safeLog('📊 useContent: Content parent localizado:', {
+        contentId: data.contentId,
+        documentId: documentId,
+        contentTitle: content?.title,
+        existingAdditions: (content as any)?.strapiData?.all_wiki_additions?.length || 0,
+        timestamp: new Date().toISOString()
+      });
+      
+      const result = await contentService.createWikiAddition({
+        contentId: documentId,
+        title: data.title,
+        textContent: data.textContent,
+        type: data.type,
+        file: data.file,
+        author: data.author
+      });
+
+      if (result.success) {
+        safeLog('✅ useContent: Wiki addition criada com sucesso:', {
+          resultData: result.data,
+          timestamp: new Date().toISOString()
+        });
+        
+        await loadContents();
+        
+        performanceLog('Criação de Wiki Addition (com reload)', startTime);
+        showNotification(`Nova adição "${data.title}" criada com sucesso!`, 'success');
+        return true;
+        
+      } else {
+        throw new Error(result.message || 'Falha ao criar Wiki Addition');
+      }
+      
+    } catch (err: any) {
+      const errorMessage = err.message || 'Erro ao criar adição';
+      safeError('❌ useContent: Erro ao criar Wiki Addition:', {
+        error: err.message || err,
+        data: {
+          contentId: data.contentId,
+          title: data.title,
+          type: data.type
+        },
+        stack: err.stack,
+        timestamp: new Date().toISOString()
+      });
+      setError(errorMessage);
+      showNotification(errorMessage, 'error');
+      return false;
+    }
+  }, [contents, loadContents, showNotification]);
+
+  const deleteWikiAddition = useCallback(async (id: string | number): Promise<boolean> => {
+    const startTime = performance.now();
+    
+    try {
+      safeLog('🗑️ useContent: Iniciando exclusão de Wiki Addition:', {
+        id,
+        idType: typeof id,
+        timestamp: new Date().toISOString()
+      });
+      
+      if (!id) {
+        throw new Error('ID da adição não fornecido');
+      }
+
+      // Converte para string para garantir comparação consistente
+      const idStr = String(id);
+      safeLog('ℹ️ useContent: ID convertido para string para comparação:', { idStr });
+
+      // ✅ CORREÇÃO: Remove o item localmente para feedback instantâneo.
+      setContents(prevContents => {
+        const newContents = prevContents.map(item => {
+          const strapiData = item.strapiData || {};
+          const allWikiAdditions = strapiData.all_wiki_additions || [];
+          
+          // Filtra as adições que não correspondem ao ID a ser excluído
+          const updatedAdditions = allWikiAdditions.filter((add: any) => {
+            if (!add || !add.id) return true; // Ignora itens inválidos
+            
+            const addIdStr = String(add.id);
+            const matches = addIdStr !== idStr;
+            if (!matches) {
+              safeLog('ℹ️ useContent: Encontrada adição para remover localmente:', { 
+                contentId: item.id, 
+                additionId: add.id,
+                additionTitle: add.title
+              });
+            }
+            return matches;
+          });
+          
+          // Se o número de adições mudou, registra a remoção
+          if (updatedAdditions.length !== allWikiAdditions.length) {
+            safeLog('📊 useContent: Wiki addition removida localmente do estado.', { 
+              contentId: item.id, 
+              additionId: id,
+              removedCount: allWikiAdditions.length - updatedAdditions.length
+            });
+          }
+          
+          return {
+            ...item,
+            strapiData: {
+              ...strapiData,
+              all_wiki_additions: updatedAdditions
+            }
+          };
+        });
+        
+        return newContents;
+      });
+      
+      safeLog('🔄 useContent: Chamando API para excluir Wiki Addition:', { id });
+      const result = await contentService.deleteWikiAddition(id);
+
+      if (result.success) {
+        safeLog('✅ useContent: Wiki Addition excluída com sucesso via API:', {
+          id,
+          resultData: result.data
+        });
+        
+        // Em caso de sucesso, recarrega para sincronizar.
+        safeLog('🔄 useContent: Recarregando conteúdos após exclusão bem-sucedida');
+        await loadContents();
+        
+        performanceLog('Exclusão de Wiki Addition', startTime);
+        showNotification('Adição excluída com sucesso!', 'success');
+        return true;
+      } else {
+        throw new Error(result.message || 'Falha ao excluir adição');
+      }
+      
+    } catch (err: any) {
+      const errorMessage = err.message || 'Erro ao excluir adição';
+      safeError('❌ useContent: Erro ao excluir Wiki Addition:', {
+        error: err.message || err,
+        id,
+        idType: typeof id,
+        stack: err.stack,
+        timestamp: new Date().toISOString()
+      });
+      setError(errorMessage);
+      showNotification(errorMessage, 'error');
+      return false;
+    }
+  }, [loadContents, showNotification]);
+
+  // ✅ NOVO: ATUALIZAR WIKI ADDITION COM LOGS DETALHADOS
+  const updateWikiAddition = useCallback(async (data: {
+    additionId: string | number;
+    contentId: string; // ID do artigo principal
+    title: string;
+    textContent: string;
+    type: ContentType;
+    file?: File;
+    author?: string;
+  }): Promise<boolean> => {
+    const startTime = performance.now();
+    
+    try {
+      safeLog('🔄 useContent: Iniciando atualização de Wiki Addition:', { 
+        additionId: data.additionId, 
+        contentId: data.contentId, 
+        title: data.title, 
+        type: data.type, 
+        hasFile: !!data.file,
+        timestamp: new Date().toISOString()
+      });
+
+      // Validação de entrada
+      if (!data.additionId) {
+        throw new Error('ID da adição não fornecido');
+      }
+
+      // Preparar dados para atualização
+      const additionId = Number(data.additionId);
+      if (isNaN(additionId)) {
+        throw new Error(`ID da adição inválido: ${data.additionId}`);
+      }
+
+      // Criar conteúdo formatado para o Strapi
+      const content = [
+        {
+          type: 'paragraph',
+          children: [{ text: data.textContent || '', type: 'text' }]
+        }
+      ];
+
+      // Preparar dados para atualização
+      const updateData: Partial<any> = {
+        title: data.title,
+        content: content,
+        author: data.author || 'Sistema'
+      };
+
+      // Se houver arquivo, fazer upload primeiro
+      if (data.file) {
+        try {
+          const uploadResult = await contentService.uploadFile(data.file);
+          if (uploadResult && uploadResult.length > 0) {
+            updateData.attachments = {
+              connect: [uploadResult[0].id]
+            };
+          }
+        } catch (uploadError) {
+          safeWarn('⚠️ useContent: Falha no upload, continuando sem arquivo:', uploadError);
+        }
+      }
+
+      // Chamar o serviço de atualização
+      const result = await contentService.updateWikiAddition(additionId, updateData);
+
+      safeLog('✅ useContent: Wiki addition atualizada com sucesso:', { 
+        additionId: data.additionId, 
+        result: result,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Recarregar conteúdos para refletir as mudanças
+      await loadContents();
+
+      performanceLog('Atualização de Wiki Addition', startTime);
+      showNotification(`Adição "${data.title}" atualizada com sucesso!`, 'success');
+      return true;
+    } catch (err: any) {
+      const errorMessage = err.message || 'Erro ao atualizar adição';
+      safeError('❌ useContent: Erro ao atualizar Wiki Addition:', {
+        error: err.message || err,
+        data: {
+          additionId: data.additionId,
+          contentId: data.contentId,
+          title: data.title
+        },
+        stack: err.stack,
+        timestamp: new Date().toISOString()
+      });
+      setError(errorMessage);
+      showNotification(errorMessage, 'error');
+      return false;
+    }
+  }, [loadContents, showNotification]);
+
+  const uploadFile = useCallback(async (file: File) => {
+    const startTime = performance.now();
+    
+    try {
+      safeLog('📤 useContent: Iniciando upload de arquivo:', {
+        fileName: file.name,
+        fileSize: `${(file.size / 1024).toFixed(2)} KB`,
+        fileType: file.type,
+        timestamp: new Date().toISOString()
+      });
+      
+      // ✅ VALIDAÇÕES COM LOGS
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      if (file.size > maxSize) {
+        const errorMsg = `Arquivo muito grande: ${(file.size / 1024 / 1024).toFixed(2)}MB. Máximo: 10MB`;
+        safeWarn('⚠️ useContent: Arquivo muito grande:', {
+          fileName: file.name,
+          fileSize: file.size,
+          maxSize
+        });
+        throw new Error(errorMsg);
+      }
+      
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'video/mp4', 'video/webm'];
+      if (!allowedTypes.includes(file.type)) {
+        safeWarn('⚠️ useContent: Tipo de arquivo não suportado:', {
+          fileName: file.name,
+          fileType: file.type,
+          allowedTypes
+        });
+        throw new Error(`Tipo de arquivo não suportado: ${file.type}. Use: ${allowedTypes.join(', ')}`);
+      }
+      
+      const result = await contentService.uploadFile(file);
+      
+      safeLog('✅ useContent: Upload realizado com sucesso:', {
+        fileName: file.name,
+        result: result[0] ? {
+          id: result[0].id,
+          name: result[0].name,
+          url: result[0].url,
+          size: result[0].size
+        } : result,
+        timestamp: new Date().toISOString()
+      });
+      
+      performanceLog('Upload de arquivo', startTime);
+      showNotification('Arquivo enviado com sucesso!');
+      return result;
+      
+    } catch (err: any) {
+      const errorMessage = err.message || 'Erro no upload';
+      safeError('❌ useContent: Erro no upload:', {
+        error: err.message || err,
+        fileName: file.name,
+        fileSize: file.size,
+        stack: err.stack,
+        timestamp: new Date().toISOString()
+      });
+      setError(errorMessage);
+      showNotification(errorMessage, 'error');
+      throw err;
+    }
+  }, [showNotification]);
+
+  const deleteFile = useCallback(async (fileId: string): Promise<boolean> => {
+    try {
+      safeLog('🗑️ useContent: Iniciando exclusão de arquivo:', {
+        fileId,
+        timestamp: new Date().toISOString()
+      });
+      
+      if (!fileId) {
+        throw new Error('ID do arquivo inválido');
+      }
+      
+      const result = await contentService.deleteFile(fileId);
+
+      if (result.success) {
+        safeLog('✅ useContent: Arquivo excluído com sucesso:', {
+          fileId,
+          timestamp: new Date().toISOString()
+        });
+        showNotification('Arquivo excluído com sucesso!', 'success');
+        return true;
+      } else {
+        throw new Error(result.message || 'Falha ao excluir arquivo');
+      }
+      
+    } catch (err: any) {
+      const errorMessage = err.message || 'Erro ao excluir arquivo';
+      safeError('❌ useContent: Erro ao excluir arquivo:', {
+        error: err.message || err,
+        fileId,
+        timestamp: new Date().toISOString()
+      });
+      setError(errorMessage);
+      showNotification(errorMessage, 'error');
+      return false;
+    }
+  }, [showNotification]);
+
+  const getContentById = useCallback((id: string | number): ContentItem | undefined => {
+    const content = contents.find(content => content.id.toString() === id.toString());
+    
+    if (ENV_CONFIG.isDev) {
+      safeDebug('🔍 useContent: Busca por ID:', {
+        searchId: id,
+        found: !!content,
+        foundTitle: content?.title,
+        totalContents: contents.length
+      });
+    }
+    
+    return content;
+  }, [contents]);
+
+  const clearError = useCallback(() => {
+    safeLog('🧹 useContent: Limpando erro');
+    setError(null);
+  }, []);
+
+  useEffect(() => {
+    if (autoLoad) {
+      safeLog('🚀 useContent: Auto load habilitado:', {
+        sector,
+        timestamp: new Date().toISOString()
+      });
+      loadContents();
+    } else {
+      safeLog('⏸️ useContent: Auto load desabilitado');
+    }
+  }, [autoLoad, loadContents]);
+
+  useEffect(() => {
+    if (ENV_CONFIG.isDev) { 
+      safeDebug('📊 useContent: Estado atualizado:', {
+        contentsCount: contents.length,
+        loading,
+        hasError: !!error,
+        errorMessage: error,
+        sector,
+        timestamp: new Date().toISOString(),
+        contentsWithAdditions: contents.filter(c => (c as any)?.strapiData?.all_wiki_additions?.length > 0).length
+      });
+    }
+  }, [contents.length, loading, error, sector]);
+
+  return {
+    // Estado
+    contents,
+    loading,
+    error,
+    
+    // Ações básicas
+    loadContents,
+    refreshContents,
+    
+    // CRUD de conteúdo
+    createContent,
+    updateContent,
+    deleteContent,
+    
+    // Wiki Additions
+    createWikiAddition,
+    deleteWikiAddition,
+    
+    // Upload de arquivos
+    uploadFile,
+    deleteFile,
+    
+    // Utilitários
+    getContentById,
+    clearError,
+  };
+};
+
+export default useContent;
+
+
+
+/// arquivo em teste 
+
+
+import { useState, useCallback, useEffect } from 'react';
+import { contentService } from '../services/content.service';
+import { ContentType, type ContentItem, type CreateContentData, type UpdateContentData } from '../types/content.types';
+import type { SectorType } from '../types/common.types';
+import { 
+  safeLog, 
+  safeWarn, 
+  safeError, 
+  safeDebug, 
+  safeTime, 
+  safeTimeEnd, 
+  performanceLog,
+  ENV_CONFIG 
+} from '../utils/envUtils';
+
+interface UseContentOptions {
+  sector?: SectorType;
+  autoLoad?: boolean;
+}
+
+interface UseContentReturn {
+  // Estado
+  contents: ContentItem[];
+  loading: boolean;
+  error: string | null;
+  
+  // Ações básicas
+  loadContents: () => Promise<void>;
+  refreshContents: () => Promise<void>;
+  
+  // CRUD de conteúdo
+  createContent: (data: CreateContentData) => Promise<ContentItem>;
+  updateContent: (id: string, data: UpdateContentData) => Promise<ContentItem>;
+  deleteContent: (id: string) => Promise<boolean>;
+  
+  // Wiki Additions
+  createWikiAddition: (data: {
+    contentId: string;
+    title: string;
+    textContent: string;
+    type: ContentType;
+    file?: File;
+    author?: string;
+  }) => Promise<boolean>;
+  deleteWikiAddition: (id: string | number) => Promise<boolean>;
+  
+  // Upload de arquivos
+  uploadFile: (file: File) => Promise<any>;
+  deleteFile: (fileId: string) => Promise<boolean>;
+  
+  // Utilitários
+  getContentById: (id: string | number) => ContentItem | undefined;
+  clearError: () => void;
+}
+
+export const useContent = (options: UseContentOptions = {}): UseContentReturn => {
+  const { sector, autoLoad = true } = options;
+  
+  // Estado
+  const [contents, setContents] = useState<ContentItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const showNotification = useCallback((message: string, type: 'success' | 'error' = 'success') => {
+    const notification = document.createElement('div');
+    const bgColor = type === 'success' ? 'bg-green-500' : 'bg-red-500';
+    notification.className = `fixed top-4 right-4 ${bgColor} text-white px-4 py-2 rounded shadow-lg z-50 max-w-sm`;
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+      if (document.body.contains(notification)) {
+        document.body.removeChild(notification);
+      }
+    }, type === 'error' ? 5000 : 3000);
+  }, []);
+
+  const loadContents = useCallback(async () => {
+    const startTime = performance.now();
+    safeTime('useContent-loadContents');
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      safeLog('🔄 useContent: Carregando conteúdos...', { 
+        sector, 
+        timestamp: new Date().toISOString(),
+        autoLoad 
+      });
+      
+      const data = sector ? 
+        await contentService.getContentsBySector(sector) : 
+        await contentService.getAllContents();
+      
+      safeLog('✅ useContent: Conteúdos carregados com sucesso:', {
+        count: data.length,
+        sector,
+        timestamp: new Date().toISOString(),
+        firstItem: data[0]?.title || 'Nenhum item',
+        hasWikiAdditions: data.some(item => (item as any)?.strapiData?.all_wiki_additions?.length > 0)
+      });
+      
+      setContents(data);
+      performanceLog('Carregamento de conteúdos', startTime);
+      
+    } catch (err: any) {
+      const errorMessage = err.message || 'Erro ao carregar conteúdos';
+      safeError('❌ useContent: Erro ao carregar conteúdos:', {
+        error: err.message || err,
+        stack: err.stack,
+        sector,
+        timestamp: new Date().toISOString()
+      });
+      setError(errorMessage);
+      showNotification(errorMessage, 'error');
+    } finally {
+      setLoading(false);
+      safeTimeEnd('useContent-loadContents');
+    }
+  }, [sector, showNotification, autoLoad]);
+
+  const refreshContents = useCallback(() => {
+    safeLog('🔄 useContent: Refresh manual solicitado');
+    return loadContents();
+  }, [loadContents]);
+
+  const createContent = useCallback(async (data: CreateContentData): Promise<ContentItem> => {
+    const startTime = performance.now();
+    
+    try {
+      safeLog('➕ useContent: Criando conteúdo:', {
+        title: data.title,
+        type: data.type,
+        sector: data.sector,
+        hasFile: !!(data as any).file,
+        timestamp: new Date().toISOString()
+      });
+      
+      const newContent = await contentService.createContent(data);
+      
+      setContents(prev => {
+        const updated = [newContent, ...prev];
+        safeDebug('📊 useContent: Estado atualizado após criação:', {
+          totalItens: updated.length,
+          novoItem: {
+            id: newContent.id,
+            title: newContent.title
+          }
+        });
+        return updated;
+      });
+      
+      safeLog('✅ useContent: Conteúdo criado com sucesso:', {
+        id: newContent.id,
+        title: newContent.title,
+        timestamp: new Date().toISOString()
+      });
+      
+      performanceLog('Criação de conteúdo', startTime);
+      showNotification('Conteúdo criado com sucesso!');
+      return newContent;
+      
+    } catch (err: any) {
+      const errorMessage = err.message || 'Erro ao criar conteúdo';
+      safeError('❌ useContent: Erro ao criar conteúdo:', {
+        error: err.message || err,
+        data: { title: data.title, type: data.type },
+        timestamp: new Date().toISOString()
+      });
+      setError(errorMessage);
+      showNotification(errorMessage, 'error');
+      throw err;
+    }
+  }, [showNotification]);
+
+  const updateContent = useCallback(async (id: string, data: UpdateContentData): Promise<ContentItem> => {
+    const startTime = performance.now();
+    
+    try {
+      safeLog('🔄 useContent: Atualizando conteúdo:', {
+        id,
+        updates: Object.keys(data),
+        timestamp: new Date().toISOString()
+      });
+      
+      const updatedContent = await contentService.updateContent(id, data);
+      
+      setContents(prev => {
+        const updated = prev.map(content => {
+          const match = content.id.toString() === id.toString();
+          if (match) {
+            safeDebug('🔄 useContent: Item atualizado no estado:', {
+              id: content.id,
+              oldTitle: content.title,
+              newTitle: updatedContent.title
+            });
+          }
+          return match ? updatedContent : content;
+        });
+        
+        safeDebug('📊 useContent: Estado após atualização:', {
+          totalItens: updated.length,
+          itemAtualizado: updatedContent.title
+        });
+        
+        return updated;
+      });
+      
+      safeLog('✅ useContent: Conteúdo atualizado com sucesso:', {
+        id,
+        title: updatedContent.title,
+        timestamp: new Date().toISOString()
+      });
+      
+      performanceLog('Atualização de conteúdo', startTime);
+      showNotification('Conteúdo atualizado com sucesso!');
+      return updatedContent;
+      
+    } catch (err: any) {
+      const errorMessage = err.message || 'Erro ao atualizar conteúdo';
+      safeError('❌ useContent: Erro ao atualizar conteúdo:', {
+        error: err.message || err,
+        id,
+        updates: Object.keys(data),
+        timestamp: new Date().toISOString()
+      });
+      setError(errorMessage);
+      showNotification(errorMessage, 'error');
+      throw err;
+    }
+  }, [showNotification]);
+
+  const deleteContent = useCallback(async (id: string): Promise<boolean> => {
+    const startTime = performance.now();
+    
+    try {
+      safeLog('🗑️ useContent: Iniciando exclusão de conteúdo:', {
+        id,
+        timestamp: new Date().toISOString()
+      });
+      
+      const result = await contentService.deleteContent(id);
+      
+      if (result.success) {
+        safeLog('✅ useContent: Exclusão confirmada pela API');
+        
+        // ✅ AGUARDAR UM POUCO PARA GARANTIR PERSISTÊNCIA
+        safeDebug('⏳ useContent: Aguardando persistência no servidor...');
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        // ✅ FAZER RELOAD COMPLETO PARA GARANTIR SINCRONIZAÇÃO
+        safeLog('🔄 useContent: Recarregando lista completa após exclusão...');
+        await loadContents();
+        
+        performanceLog('Exclusão de conteúdo (com reload)', startTime);
+        showNotification('Conteúdo excluído com sucesso!');
+        return true;
+        
+      } else {
+        throw new Error(result.message || 'Falha ao excluir conteúdo');
+      }
+      
+    } catch (err: any) {
+      const errorMessage = err.message || 'Erro ao excluir conteúdo';
+      safeError('❌ useContent: Erro na exclusão:', {
+        error: err.message || err,
+        id,
+        stack: err.stack,
+        timestamp: new Date().toISOString()
+      });
+      setError(errorMessage);
+      showNotification(errorMessage, 'error');
+      return false;
+    }
+  }, [contents, loadContents, showNotification]);
+
+  const createWikiAddition = useCallback(async (data: {
+    contentId: string;
+    title: string;
+    textContent: string;
+    type: ContentType;
+    file?: File;
+    author?: string;
+  }): Promise<boolean> => {
+    const startTime = performance.now();
+    
+    try {
+      safeLog('➕ useContent: Iniciando criação de Wiki Addition:', {
+        contentId: data.contentId,
+        title: data.title,
+        type: data.type,
+        hasFile: !!data.file,
+        author: data.author || 'Sistema',
+        timestamp: new Date().toISOString()
+      });
+      
+      const content = contents.find(c => c.id.toString() === data.contentId);
+      if (!content) {
+        throw new Error(`Content com ID ${data.contentId} não encontrado no estado local`);
+      }
+      
+      const documentId = (content as any)?.strapiData?.documentId;
+      if (!documentId) {
+        throw new Error(`DocumentId não encontrado para o content ID ${data.contentId}`);
+      }
+      
+      safeLog('📊 useContent: Content parent localizado:', {
+        contentId: data.contentId,
+        documentId: documentId,
+        contentTitle: content?.title,
+        existingAdditions: (content as any)?.strapiData?.all_wiki_additions?.length || 0,
+        timestamp: new Date().toISOString()
+      });
+      
+      // ✅ USAR CONTENTSERVICE COM DOCUMENT ID
+      const result = await contentService.createWikiAddition({
+        contentId: documentId, // ✅ PASSAR DOCUMENT ID
+        title: data.title,
+        textContent: data.textContent,
+        type: data.type,
+        file: data.file,
+        author: data.author
+      });
+
+      if (result.success) {
+        safeLog('✅ useContent: Wiki addition criada com sucesso:', {
+          resultData: result.data,
+          timestamp: new Date().toISOString()
+        });
+        
+        // ✅ AGUARDAR UM POUCO E RECARREGAR PARA PEGAR A NOVA ADIÇÃO
+        safeDebug('⏳ useContent: Aguardando antes do reload...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        safeLog('🔄 useContent: Recarregando conteúdos para incluir nova adição...');
+        await loadContents();
+        
+        performanceLog('Criação de Wiki Addition (com reload)', startTime);
+        showNotification(`Nova adição "${data.title}" criada com sucesso!`, 'success');
+        return true;
+        
+      } else {
+        throw new Error(result.message || 'Falha ao criar Wiki Addition');
+      }
+      
+    } catch (err: any) {
+      const errorMessage = err.message || 'Erro ao criar adição';
+      safeError('❌ useContent: Erro ao criar Wiki Addition:', {
+        error: err.message || err,
+        data: {
+          contentId: data.contentId,
+          title: data.title,
+          type: data.type
+        },
+        stack: err.stack,
+        timestamp: new Date().toISOString()
+      });
+      setError(errorMessage);
+      showNotification(errorMessage, 'error');
+      return false;
+    }
+  }, [contents, loadContents, showNotification]);
+
+  const deleteWikiAddition = useCallback(async (id: string | number): Promise<boolean> => {
+    const startTime = performance.now();
+    
+    try {
+      safeLog('🗑️ useContent: Iniciando exclusão de Wiki Addition:', {
+        id,
+        idType: typeof id,
+        timestamp: new Date().toISOString()
+      });
+      
+      if (!id) {
+        throw new Error('ID da adição não fornecido');
+      }
+
+      // Converte para string para garantir comparação consistente
+      const idStr = String(id);
+      safeLog('ℹ️ useContent: ID convertido para string para comparação:', { idStr });
+
+      // ✅ CORREÇÃO: Remove o item localmente para feedback instantâneo.
+      setContents(prevContents => {
+        const newContents = prevContents.map(item => {
+          const strapiData = item.strapiData || {};
+          const allWikiAdditions = strapiData.all_wiki_additions || [];
+          
+          // Filtra as adições que não correspondem ao ID a ser excluído
+          const updatedAdditions = allWikiAdditions.filter((add: any) => {
+            const addIdStr = String(add.id);
+            const matches = addIdStr !== idStr;
+            if (!matches) {
+              safeLog('ℹ️ useContent: Encontrada adição para remover localmente:', { 
+                contentId: item.id, 
+                additionId: add.id,
+                additionTitle: add.title
+              });
+            }
+            return matches;
+          });
+          
+          // Se o número de adições mudou, registra a remoção
+          if (updatedAdditions.length !== allWikiAdditions.length) {
+            safeLog('📊 useContent: Wiki addition removida localmente do estado.', { 
+              contentId: item.id, 
+              additionId: id,
+              removedCount: allWikiAdditions.length - updatedAdditions.length
+            });
+          }
+          
+          return {
+            ...item,
+            strapiData: {
+              ...strapiData,
+              all_wiki_additions: updatedAdditions
+            }
+          };
+        });
+        
+        return newContents;
+      });
+      
+      const result = await contentService.deleteWikiAddition(id);
+
+      if (result.success) {
+        safeLog('✅ useContent: Wiki Addition excluída com sucesso via API');
+        
+        // ✅ AGUARDAR E RECARREGAR
+        safeDebug('⏳ useContent: Aguardando persistência...');
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        safeLog('🔄 useContent: Recarregando para atualizar wiki additions...');
+        await loadContents();
+        
+        performanceLog('Exclusão de Wiki Addition (com reload)', startTime);
+        showNotification('Adição excluída com sucesso!', 'success');
+        return true;
+        
+      } else {
+        throw new Error(result.message || 'Falha ao excluir adição');
+      }
+      
+    } catch (err: any) {
+      const errorMessage = err.message || 'Erro ao excluir adição';
+      safeError('❌ useContent: Erro ao excluir Wiki Addition:', {
+        error: err.message || err,
+        id,
+        idType: typeof id,
+        stack: err.stack,
+        timestamp: new Date().toISOString()
+      });
+      setError(errorMessage);
+      showNotification(errorMessage, 'error');
+      return false;
+    }
+  }, [contents, loadContents, showNotification]);
+
+  // ✅ NOVO: ATUALIZAR WIKI ADDITION COM LOGS DETALHADOS
+  const updateWikiAddition = useCallback(async (data: {
+    additionId: string | number;
+    contentId: string; // ID do artigo principal
+    title: string;
+    textContent: string;
+    type: ContentType;
+    file?: File;
+    author?: string;
+  }): Promise<boolean> => {
+    const startTime = performance.now();
+    
+    try {
+      safeLog('🔄 useContent: Iniciando
